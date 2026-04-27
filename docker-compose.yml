@@ -5,7 +5,7 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - /home/latzo/epg/channels.xml:/epg/public/channels.xml
+      - ./data:/epg/public
 
   xmltv-api:
     build: .
