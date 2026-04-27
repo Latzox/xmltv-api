@@ -20,6 +20,9 @@ async function fetchAndParseGuide() {
     ignoreAttributes: false,
     attributeNamePrefix: '_',
     isArray: (name) => ['channel', 'programme'].includes(name),
+    processEntities: true,
+    htmlEntities: true,
+    entityExpansion: 10000,
   });
 
   const parsed = parser.parse(response.data);

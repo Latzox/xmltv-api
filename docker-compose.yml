@@ -7,13 +7,13 @@ services:
     volumes:
       - /home/latzo/epg/channels.xml:/epg/public/channels.xml
 
-  epg-api:
-    build: ./epg-api
+  xmltv-api:
+    build: .
     restart: always
     ports:
       - "3001:3001"
     environment:
       - EPG_URL=http://epg:3000/guide.xml
-      - REFRESH_INTERVAL_MS=3600000   # re-fetch every hour
+      - REFRESH_INTERVAL_MS=3600000
     depends_on:
       - epg
