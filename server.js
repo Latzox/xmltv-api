@@ -59,7 +59,6 @@ async function fetchAndParseGuide() {
     stop: parseXmltvDate(p._stop),
     title: extractText(p.title) || '',
     description: extractText(p.desc) || null,
-    category: extractText(p.category) || null,
     episode: extractText(p['episode-num']) || null,
     rating: p.rating?.value ? String(p.rating.value) : null,
   }));
@@ -132,7 +131,6 @@ app.get('/now', (req, res) => {
     channelId: p.channelId,
     title: p.title,
     description: p.description,
-    category: p.category,
     start: p.start,
     stop: p.stop,
     minutesRemaining: Math.round((p.stop - now) / 60000),
@@ -167,7 +165,6 @@ app.get('/next', (req, res) => {
       channelId: p.channelId,
       title: p.title,
       description: p.description,
-      category: p.category,
       start: p.start,
       stop: p.stop,
       startsInMinutes: Math.round((p.start - now) / 60000),
@@ -205,7 +202,6 @@ app.get('/channel/:id', (req, res) => {
     .map((p) => ({
       title: p.title,
       description: p.description,
-      category: p.category,
       start: p.start,
       stop: p.stop,
       episode: p.episode,
@@ -223,10 +219,10 @@ app.get('/channel/:id', (req, res) => {
 
 app.get('/search', (req, res) => {
   if (!ensureLoaded(res)) return;
-  const { q, category, date } = req.query;
+  const { q, date } = req.query;
 
-  if (!q && !category) {
-    return res.status(400).json({ error: 'Provide at least ?q= or ?category=' });
+  if (!q) {
+    return res.status(400).json({ error: 'Provide ?q=' });
   }
 
   const channelMap = Object.fromEntries(guideData.channels.map((c) => [c.id, c.name]));
@@ -234,19 +230,11 @@ app.get('/search', (req, res) => {
 
   let results = guideData.programmes.filter((p) => p.start > now);
 
-  if (q) {
-    const query = q.toLowerCase();
-    results = results.filter(
-      (p) =>
-        p.title.toLowerCase().includes(query) ||
-        (p.description && p.description.toLowerCase().includes(query))
-    );
-  }
-
-  if (category) {
-    const cat = category.toLowerCase();
-    results = results.filter((p) => p.category && p.category.toLowerCase().includes(cat));
-  }
+  const tokens = q.toLowerCase().replace(/^["']|["']$/g, '').split(/\s+/).filter(Boolean);
+  results = results.filter((p) => {
+    const haystack = `${p.title} ${p.description || ''}`.toLowerCase();
+    return tokens.every((t) => haystack.includes(t));
+  });
 
   if (date) {
     const startOfDay = new Date(`${date}T00:00:00`);
@@ -262,12 +250,11 @@ app.get('/search', (req, res) => {
       channelId: p.channelId,
       title: p.title,
       description: p.description,
-      category: p.category,
       start: p.start,
       stop: p.stop,
     }));
 
-  res.json({ query: q || null, category: category || null, count: mapped.length, programmes: mapped });
+  res.json({ query: q, count: mapped.length, programmes: mapped });
 });
 
 app.post('/refresh', async (req, res) => {

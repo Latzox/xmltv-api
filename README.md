@@ -18,36 +18,25 @@ It fetches the guide from the [iptv-org/epg](https://github.com/iptv-org/epg) co
 ## Project Structure
 
 ```
-epg-api/
-├── server.js          # Express app
+xmltv-api/
+├── server.js           # Express app
 ├── package.json
 ├── Dockerfile
-└── docker-compose.yml # Runs both epg + epg-api together
+├── docker-compose.yml  # Runs both epg + xmltv-api together
+└── data/
+    ├── channels.xml    # Input — channel list for iptv-org/epg
+    └── guide.xml       # Output — generated guide, persisted across restarts (gitignored)
 ```
 
 ---
 
 ## Deployment
 
-Place `docker-compose.yml` alongside your `channels.xml` file and the `epg-api/` folder:
-
-```
-/home/latzo/epg/
-├── channels.xml
-├── docker-compose.yml
-└── epg-api/
-    ├── server.js
-    ├── package.json
-    └── Dockerfile
-```
-
-Then start both containers:
-
 ```bash
 docker compose up -d
 ```
 
-The `epg-api` container will fetch `guide.xml` from the `epg` container on startup via `http://epg:3000/guide.xml` and refresh it every hour.
+The `epg` container reads `data/channels.xml`, generates `data/guide.xml`, and serves it at `http://epg:3000/guide.xml`. The `xmltv-api` container fetches that on startup and refreshes it every hour.
 
 ---
 
@@ -126,7 +115,6 @@ GET /now?channel=srf
       "channelId": "SRF1.ch",
       "title": "Tagesschau",
       "description": "Die aktuellen Nachrichten.",
-      "category": "News",
       "start": "2026-04-27T14:00:00.000Z",
       "stop": "2026-04-27T14:20:00.000Z",
       "minutesRemaining": 8
@@ -161,7 +149,6 @@ GET /next?hours=3&channel=srf
       "channelId": "SRF1.ch",
       "title": "Meteo",
       "description": null,
-      "category": "Weather",
       "start": "2026-04-27T14:55:00.000Z",
       "stop": "2026-04-27T15:00:00.000Z",
       "startsInMinutes": 33
@@ -199,7 +186,6 @@ GET /channel/SRF1.ch?date=2026-04-28
     {
       "title": "Tagesschau",
       "description": "Die aktuellen Nachrichten.",
-      "category": "News",
       "start": "2026-04-27T14:00:00.000Z",
       "stop": "2026-04-27T14:20:00.000Z",
       "episode": null,
@@ -213,34 +199,29 @@ GET /channel/SRF1.ch?date=2026-04-28
 
 ### `GET /search`
 
-Search for upcoming programmes by title, description, or category. Returns a maximum of 100 results.
+Search upcoming programmes by title or description. Multi-word queries are tokenized on whitespace — every word must appear in the title or description (e.g. `q=Madrid Open` matches "Madrid Open Tennis 2026" and "Open de Madrid"). Returns a maximum of 100 results.
 
 **Query params:**
 
-- `q` — search term (matches title or description)
-- `category` — filter by category
+- `q` — search term (required)
 - `date` — `YYYY-MM-DD` to restrict to a specific day
-
-At least one of `q` or `category` is required.
 
 ```
 GET /search?q=news
-GET /search?category=sport&date=2026-04-28
-GET /search?q=football&category=sport
+GET /search?q=Madrid Open
+GET /search?q=football&date=2026-04-28
 ```
 
 ```json
 {
-  "query": "football",
-  "category": "sport",
+  "query": "Madrid Open",
   "count": 4,
   "programmes": [
     {
-      "channel": "SRF 2",
-      "channelId": "SRF2.ch",
-      "title": "Super League: FC Basel - YB",
-      "description": "Live football from Switzerland.",
-      "category": "Sport",
+      "channel": "Eurosport 1",
+      "channelId": "Eurosport1.de@SD",
+      "title": "Tennis: Madrid Open",
+      "description": "Live aus Madrid.",
       "start": "2026-04-28T19:00:00.000Z",
       "stop": "2026-04-28T21:00:00.000Z"
     }
@@ -277,6 +258,6 @@ In n8n, add an **HTTP Request** node with:
 Feed the JSON response directly into your AI agent node. Useful prompts to pair with the data:
 
 - *"What's on TV right now?"* → `/now`
-- *"Is there anything about football on tonight?"* → `/search?category=sport&date=today`
+- *"Is there anything about football on tonight?"* → `/search?q=football&date=today`
 - *"What's on SRF 1 today?"* → `/channel/SRF1.ch`
 - *"What's coming up in the next 2 hours?"* → `/next?hours=2`
