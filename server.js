@@ -26,13 +26,23 @@ async function fetchAndParseGuide() {
   const parsed = parser.parse(response.data);
   const tv = parsed.tv;
 
-  const channels = (tv.channel || []).map((ch) => ({
-    id: ch._id,
-    name: Array.isArray(ch['display-name'])
-      ? ch['display-name'][0]?.['#text'] || ch['display-name'][0]
-      : ch['display-name']?.['#text'] || ch['display-name'] || ch._id,
-    icon: ch.icon?._src || null,
-  }));
+  const extractName = (dn) => {
+    if (!dn) return null;
+    if (typeof dn === 'string') return dn;
+    if (typeof dn === 'number') return String(dn);
+    if (dn['#text']) return String(dn['#text']);
+    return null;
+  };
+
+  const channels = (tv.channel || []).map((ch) => {
+    const dn = ch['display-name'];
+    const rawName = Array.isArray(dn) ? extractName(dn[0]) : extractName(dn);
+    return {
+      id: ch._id,
+      name: rawName || String(ch._id),
+      icon: ch.icon?._src || null,
+    };
+  });
 
   const programmes = (tv.programme || []).map((p) => ({
     channelId: p._channel,
