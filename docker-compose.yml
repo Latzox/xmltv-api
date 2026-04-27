@@ -1,0 +1,19 @@
+services:
+  epg:
+    image: ghcr.io/iptv-org/epg:master
+    restart: always
+    ports:
+      - "3000:3000"
+    volumes:
+      - /home/latzo/epg/channels.xml:/epg/public/channels.xml
+
+  epg-api:
+    build: ./epg-api
+    restart: always
+    ports:
+      - "3001:3001"
+    environment:
+      - EPG_URL=http://epg:3000/guide.xml
+      - REFRESH_INTERVAL_MS=3600000   # re-fetch every hour
+    depends_on:
+      - epg
