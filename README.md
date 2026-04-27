@@ -69,11 +69,11 @@ Returns the current status of the API.
 
 ### `GET /channels`
 
-Returns all channels. Optionally filter by name or ID.
+Search channels by name or ID. `q` is required to keep responses scoped (the full guide has thousands of channels).
 
 **Query params:**
 
-- `q` — search term (matches channel name or ID)
+- `q` — search term, matches channel name or ID (required)
 
 ```
 GET /channels?q=srf
@@ -94,15 +94,17 @@ GET /channels?q=srf
 
 ### `GET /now`
 
-Returns what is currently airing on all channels.
+Returns what is currently airing on all channels. The default response omits programme descriptions to keep the payload small for AI agents — pass `detail=full` to include them.
 
 **Query params:**
 
 - `channel` — filter by channel name or ID (partial match)
+- `detail` — `full` to include `description` (default: omitted)
 
 ```
 GET /now
 GET /now?channel=srf
+GET /now?detail=full
 ```
 
 ```json
@@ -114,7 +116,6 @@ GET /now?channel=srf
       "channel": "SRF 1",
       "channelId": "SRF1.ch",
       "title": "Tagesschau",
-      "description": "Die aktuellen Nachrichten.",
       "start": "2026-04-27T14:00:00.000Z",
       "stop": "2026-04-27T14:20:00.000Z",
       "minutesRemaining": 8

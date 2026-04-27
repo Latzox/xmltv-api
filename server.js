@@ -99,20 +99,21 @@ app.get('/health', (req, res) => {
 app.get('/channels', (req, res) => {
   if (!ensureLoaded(res)) return;
   const { q } = req.query;
-  let channels = guideData.channels;
-  if (q) {
-    const query = q.toLowerCase();
-    channels = channels.filter((c) =>
-      c.name.toLowerCase().includes(query) || c.id.toLowerCase().includes(query)
-    );
+  if (!q) {
+    return res.status(400).json({ error: 'Provide ?q= to search channels by name or ID' });
   }
+  const query = q.toLowerCase();
+  const channels = guideData.channels.filter(
+    (c) => c.name.toLowerCase().includes(query) || c.id.toLowerCase().includes(query)
+  );
   res.json({ count: channels.length, channels });
 });
 
 app.get('/now', (req, res) => {
   if (!ensureLoaded(res)) return;
   const now = new Date();
-  const { channel } = req.query;
+  const { channel, detail } = req.query;
+  const full = detail === 'full';
 
   const channelMap = Object.fromEntries(guideData.channels.map((c) => [c.id, c.name]));
 
@@ -126,15 +127,17 @@ app.get('/now', (req, res) => {
     current = current.filter((p) => matchingIds.includes(p.channelId));
   }
 
-  const result = current.map((p) => ({
-    channel: channelMap[p.channelId] || p.channelId,
-    channelId: p.channelId,
-    title: p.title,
-    description: p.description,
-    start: p.start,
-    stop: p.stop,
-    minutesRemaining: Math.round((p.stop - now) / 60000),
-  }));
+  const result = current.map((p) => {
+    const base = {
+      channel: channelMap[p.channelId] || p.channelId,
+      channelId: p.channelId,
+      title: p.title,
+      start: p.start,
+      stop: p.stop,
+      minutesRemaining: Math.round((p.stop - now) / 60000),
+    };
+    return full ? { ...base, description: p.description } : base;
+  });
 
   res.json({ time: now.toISOString(), count: result.length, programmes: result });
 });
