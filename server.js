@@ -5,10 +5,31 @@ const { XMLParser } = require('fast-xml-parser');
 const app = express();
 const PORT = process.env.PORT || 3001;
 const EPG_URL = process.env.EPG_URL || 'http://epg:3000/guide.xml';
-const REFRESH_INTERVAL_MS = parseInt(process.env.REFRESH_INTERVAL_MS || '3600000'); // 1 hour default
+const REFRESH_INTERVAL_MS = parseInt(process.env.REFRESH_INTERVAL_MS || '3600000');
 
 let guideData = null;
 let lastFetched = null;
+
+// --- Helpers ---
+
+// Always returns a string or null, never an object
+const toString = (val) => {
+  if (val === null || val === undefined) return null;
+  if (typeof val === 'string') return val;
+  if (typeof val === 'number' || typeof val === 'boolean') return String(val);
+  if (typeof val === 'object') {
+    if (val['#text'] !== undefined) return String(val['#text']);
+    const json = JSON.stringify(val);
+    return json === '{}' ? null : json;
+  }
+  return String(val);
+};
+
+// Handles arrays, objects, strings — always returns string or null
+const extractText = (val) => {
+  if (Array.isArray(val)) return toString(val[0]);
+  return toString(val);
+};
 
 // --- XML Parsing ---
 
@@ -26,33 +47,21 @@ async function fetchAndParseGuide() {
   const parsed = parser.parse(response.data);
   const tv = parsed.tv;
 
-  const extractName = (dn) => {
-    if (!dn) return null;
-    if (typeof dn === 'string') return dn;
-    if (typeof dn === 'number') return String(dn);
-    if (dn['#text']) return String(dn['#text']);
-    return null;
-  };
-
-  const channels = (tv.channel || []).map((ch) => {
-    const dn = ch['display-name'];
-    const rawName = Array.isArray(dn) ? extractName(dn[0]) : extractName(dn);
-    return {
-      id: ch._id,
-      name: rawName || String(ch._id),
-      icon: ch.icon?._src || null,
-    };
-  });
+  const channels = (tv.channel || []).map((ch) => ({
+    id: String(ch._id ?? ''),
+    name: extractText(ch['display-name']) || String(ch._id ?? ''),
+    icon: ch.icon?._src ? String(ch.icon._src) : null,
+  }));
 
   const programmes = (tv.programme || []).map((p) => ({
-    channelId: p._channel,
+    channelId: String(p._channel ?? ''),
     start: parseXmltvDate(p._start),
     stop: parseXmltvDate(p._stop),
-    title: p.title?.['#text'] || p.title || '',
-    description: p.desc?.['#text'] || p.desc || null,
-    category: p.category?.['#text'] || p.category || null,
-    episode: p['episode-num']?.['#text'] || null,
-    rating: p.rating?.value || null,
+    title: extractText(p.title) || '',
+    description: extractText(p.desc) || null,
+    category: extractText(p.category) || null,
+    episode: extractText(p['episode-num']) || null,
+    rating: p.rating?.value ? String(p.rating.value) : null,
   }));
 
   guideData = { channels, programmes };
@@ -61,7 +70,6 @@ async function fetchAndParseGuide() {
 }
 
 function parseXmltvDate(str) {
-  // Format: 20250427183000 +0200
   if (!str) return null;
   const match = str.toString().match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})\s*([+-]\d{4})?/);
   if (!match) return null;
@@ -80,7 +88,6 @@ function ensureLoaded(res) {
 
 // --- Routes ---
 
-// Health check + status
 app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
@@ -90,19 +97,19 @@ app.get('/health', (req, res) => {
   });
 });
 
-// List all channels
 app.get('/channels', (req, res) => {
   if (!ensureLoaded(res)) return;
   const { q } = req.query;
   let channels = guideData.channels;
   if (q) {
     const query = q.toLowerCase();
-    channels = channels.filter((c) => c.name.toLowerCase().includes(query) || c.id.toLowerCase().includes(query));
+    channels = channels.filter((c) =>
+      c.name.toLowerCase().includes(query) || c.id.toLowerCase().includes(query)
+    );
   }
   res.json({ count: channels.length, channels });
 });
 
-// What's on right now across all channels (or filtered)
 app.get('/now', (req, res) => {
   if (!ensureLoaded(res)) return;
   const now = new Date();
@@ -110,9 +117,7 @@ app.get('/now', (req, res) => {
 
   const channelMap = Object.fromEntries(guideData.channels.map((c) => [c.id, c.name]));
 
-  let current = guideData.programmes.filter(
-    (p) => p.start <= now && p.stop > now
-  );
+  let current = guideData.programmes.filter((p) => p.start <= now && p.stop > now);
 
   if (channel) {
     const query = channel.toLowerCase();
@@ -136,7 +141,6 @@ app.get('/now', (req, res) => {
   res.json({ time: now.toISOString(), count: result.length, programmes: result });
 });
 
-// What's on next (upcoming within N hours)
 app.get('/next', (req, res) => {
   if (!ensureLoaded(res)) return;
   const now = new Date();
@@ -146,9 +150,7 @@ app.get('/next', (req, res) => {
 
   const channelMap = Object.fromEntries(guideData.channels.map((c) => [c.id, c.name]));
 
-  let upcoming = guideData.programmes.filter(
-    (p) => p.start > now && p.start <= cutoff
-  );
+  let upcoming = guideData.programmes.filter((p) => p.start > now && p.start <= cutoff);
 
   if (channel) {
     const query = channel.toLowerCase();
@@ -174,11 +176,10 @@ app.get('/next', (req, res) => {
   res.json({ time: now.toISOString(), hours, count: result.length, programmes: result });
 });
 
-// Schedule for a specific channel (today or by date)
 app.get('/channel/:id', (req, res) => {
   if (!ensureLoaded(res)) return;
   const channelId = req.params.id;
-  const dateParam = req.query.date; // YYYY-MM-DD or 'today'
+  const dateParam = req.query.date;
 
   const channel = guideData.channels.find(
     (c) => c.id === channelId || c.name.toLowerCase() === channelId.toLowerCase()
@@ -220,7 +221,6 @@ app.get('/channel/:id', (req, res) => {
   });
 });
 
-// Search programmes by title or description
 app.get('/search', (req, res) => {
   if (!ensureLoaded(res)) return;
   const { q, category, date } = req.query;
@@ -232,7 +232,7 @@ app.get('/search', (req, res) => {
   const channelMap = Object.fromEntries(guideData.channels.map((c) => [c.id, c.name]));
   const now = new Date();
 
-  let results = guideData.programmes.filter((p) => p.start > now); // only future/current
+  let results = guideData.programmes.filter((p) => p.start > now);
 
   if (q) {
     const query = q.toLowerCase();
@@ -256,7 +256,7 @@ app.get('/search', (req, res) => {
 
   const mapped = results
     .sort((a, b) => a.start - b.start)
-    .slice(0, 100) // cap at 100 results
+    .slice(0, 100)
     .map((p) => ({
       channel: channelMap[p.channelId] || p.channelId,
       channelId: p.channelId,
@@ -270,7 +270,6 @@ app.get('/search', (req, res) => {
   res.json({ query: q || null, category: category || null, count: mapped.length, programmes: mapped });
 });
 
-// Force refresh
 app.post('/refresh', async (req, res) => {
   try {
     await fetchAndParseGuide();
@@ -292,7 +291,6 @@ async function start() {
     }, 60000);
   }
 
-  // Refresh on interval
   setInterval(async () => {
     try { await fetchAndParseGuide(); } catch (err) { console.error('Refresh failed:', err.message); }
   }, REFRESH_INTERVAL_MS);
