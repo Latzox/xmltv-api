@@ -1,4 +1,4 @@
-# epg-api
+# xmltv-api
 
 A lightweight REST API that wraps an XMLTV `guide.xml` file and exposes it as clean JSON endpoints — designed to be consumed by AI agents (e.g. via n8n).
 
@@ -53,17 +53,18 @@ The `epg-api` container will fetch `guide.xml` from the `epg` container on start
 
 ## Environment Variables
 
-| Variable | Default | Description |
-|---|---|---|
-| `EPG_URL` | `http://epg:3000/guide.xml` | URL to fetch the XMLTV guide from |
-| `REFRESH_INTERVAL_MS` | `3600000` | How often to re-fetch the guide (ms) |
-| `PORT` | `3001` | Port the API listens on |
+| Variable              | Default                     | Description                          |
+| --------------------- | --------------------------- | ------------------------------------ |
+| `EPG_URL`             | `http://epg:3000/guide.xml` | URL to fetch the XMLTV guide from    |
+| `REFRESH_INTERVAL_MS` | `3600000`                   | How often to re-fetch the guide (ms) |
+| `PORT`                | `3001`                      | Port the API listens on              |
 
 ---
 
 ## Endpoints
 
 ### `GET /health`
+
 Returns the current status of the API.
 
 ```json
@@ -78,9 +79,11 @@ Returns the current status of the API.
 ---
 
 ### `GET /channels`
+
 Returns all channels. Optionally filter by name or ID.
 
 **Query params:**
+
 - `q` — search term (matches channel name or ID)
 
 ```
@@ -101,9 +104,11 @@ GET /channels?q=srf
 ---
 
 ### `GET /now`
+
 Returns what is currently airing on all channels.
 
 **Query params:**
+
 - `channel` — filter by channel name or ID (partial match)
 
 ```
@@ -133,9 +138,11 @@ GET /now?channel=srf
 ---
 
 ### `GET /next`
+
 Returns upcoming programmes within the next N hours.
 
 **Query params:**
+
 - `hours` — look-ahead window (default: `2`, max: `24`)
 - `channel` — filter by channel name or ID (partial match)
 
@@ -166,12 +173,15 @@ GET /next?hours=3&channel=srf
 ---
 
 ### `GET /channel/:id`
+
 Returns the full schedule for a specific channel for today or a given date.
 
 **URL params:**
+
 - `:id` — channel ID (e.g. `SRF1.ch`) or channel name (case-insensitive)
 
 **Query params:**
+
 - `date` — `YYYY-MM-DD` or `today` (default: today)
 
 ```
@@ -202,9 +212,11 @@ GET /channel/SRF1.ch?date=2026-04-28
 ---
 
 ### `GET /search`
+
 Search for upcoming programmes by title, description, or category. Returns a maximum of 100 results.
 
 **Query params:**
+
 - `q` — search term (matches title or description)
 - `category` — filter by category
 - `date` — `YYYY-MM-DD` to restrict to a specific day
@@ -239,6 +251,7 @@ GET /search?q=football&category=sport
 ---
 
 ### `POST /refresh`
+
 Forces an immediate re-fetch and re-parse of the guide.
 
 ```
